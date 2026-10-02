@@ -92,6 +92,7 @@ describe("deepPartial", () => {
     });
     const partial = deepPartial(schema);
     expectTypeOf(partial).toExtend<z.ZodObject>();
+    expectTypeOf(partial).toEqualTypeOf<z.DeepPartial<typeof schema>>();
     // Each shape entry is a ZodOptional wrapping the deep-partialed inner.
     expectTypeOf(partial.shape.name).toExtend<z.ZodOptional<z.ZodString>>();
     expectTypeOf(partial.shape.nested).toExtend<z.ZodOptional<z.ZodObject>>();

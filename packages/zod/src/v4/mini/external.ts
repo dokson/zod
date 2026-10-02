@@ -2,7 +2,7 @@ export * as core from "../core/index.js";
 export * from "./parse.js";
 export * from "./schemas.js";
 export * from "./checks.js";
-export { deepPartial } from "./deep-partial.js";
+export { deepPartial, type DeepPartial } from "./deep-partial.js";
 export { input, output } from "./in-out.js";
 
 export type { infer } from "../core/index.js";

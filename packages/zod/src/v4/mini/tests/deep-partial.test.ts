@@ -20,6 +20,7 @@ describe("mini deepPartial", () => {
   test("preserves ZodMiniObject structural type (shape accessible)", () => {
     const schema = z.object({ a: z.string(), nested: z.object({ b: z.number() }) });
     const partial = z.deepPartial(schema);
+    expectTypeOf(partial).toEqualTypeOf<z.DeepPartial<typeof schema>>();
     expectTypeOf(partial.shape.a).toExtend<z.ZodMiniOptional<z.ZodMiniString>>();
     expectTypeOf(partial.shape.nested).toExtend<z.ZodMiniOptional<z.ZodMiniObject>>();
   });

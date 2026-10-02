@@ -1545,7 +1545,7 @@ const Post = z.object({
 z.deepPartial(Post).parse({ author: {} }); // ✅
 ```
 
-The source schema is never modified, and the result is still a `ZodObject`, so `.shape` and `.extend()` keep working. A [discriminated union](#discriminated-unions) degrades to a plain `z.union()`, since an optional discriminator defeats the discriminated lookup. Like `.partial()`, it throws on an object carrying its own [refinement](#refinements).
+The source schema is never modified, and the result is still a `ZodObject`, so `.shape` and `.extend()` keep working. A [discriminated union](#discriminated-unions) degrades to a plain `z.union()`, since an optional discriminator defeats the discriminated lookup. Like `.partial()`, it throws on an object carrying its own [refinement](#refinements). The return type is exported as `z.DeepPartial<T>`.
 
 ### `.required()`
 
