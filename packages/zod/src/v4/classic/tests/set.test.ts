@@ -188,3 +188,22 @@ test("min/max", async () => {
     ]
   `);
 });
+
+test("an oversized set fails on its size without walking the elements", () => {
+  const input = new Set(Array.from({ length: 1000 }, (_, i) => `x${i}`));
+  for (const schema of [z.set(z.number()).max(3), z.set(z.number()).size(3)]) {
+    expect(schema.safeParse(input).error!.issues.map((iss) => iss.code)).toEqual(["too_big"]);
+  }
+  const shrunk = z
+    .set(z.number())
+    .overwrite((s) => new Set([...s].slice(0, 1)))
+    .max(1);
+  expect(shrunk.safeParse(new Set(["a", "b"])).success).toBe(false);
+  expect(
+    z
+      .set(z.number())
+      .max(3)
+      .safeParse(new Set(["a", "b"]))
+      .error!.issues.map((iss) => iss.code)
+  ).toEqual(["invalid_type", "invalid_type"]);
+});

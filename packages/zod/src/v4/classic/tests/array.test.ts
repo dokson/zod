@@ -140,6 +140,68 @@ test("continue parsing despite array size error", () => {
   `);
 });
 
+test("an oversized array fails on its length without walking the elements", () => {
+  let reads = 0;
+  const input: unknown[] = [];
+  for (let i = 0; i < 5; i++) {
+    Object.defineProperty(input, i, {
+      enumerable: true,
+      get() {
+        reads++;
+        return "x";
+      },
+    });
+  }
+  for (const schema of [z.array(z.number()).max(3), z.array(z.number()).length(3), z.array(z.number()).min(1).max(3)]) {
+    reads = 0;
+    const result = schema.safeParse(input);
+    expect(result.error!.issues.map((iss) => iss.code)).toEqual(["too_big"]);
+    expect(reads).toBe(0);
+  }
+
+  const big = z.array(z.number()).max(100).safeParse(Array(100_000).fill("x"));
+  expect(big.error!.issues).toHaveLength(1);
+
+  expect(
+    z
+      .array(z.number())
+      .min(3)
+      .max(5)
+      .safeParse(["a", "b"])
+      .error!.issues.map((iss) => iss.code)
+  ).toEqual(["invalid_type", "invalid_type", "too_small"]);
+
+  const shrunk = z
+    .array(z.number())
+    .overwrite((a) => a.slice(0, 2))
+    .max(2);
+  expect(shrunk.safeParse(["x", "y", "z"]).error!.issues.map((iss) => iss.code)).toEqual([
+    "invalid_type",
+    "invalid_type",
+    "invalid_type",
+    "too_big",
+  ]);
+  expect(z.validate(shrunk, ["x", "y", "z"])).toBe(false);
+
+  const gated = z.array(z.number()).check(z.maxLength(3, { when: () => false } as any));
+  expect(gated.safeParse(Array(5).fill("x")).error!.issues).toHaveLength(5);
+  expect(gated.safeParse([1, 2, 3, 4, 5]).success).toBe(true);
+});
+
+test("nested issue paths keep their order", () => {
+  const schema = z.array(z.object({ a: z.array(z.number()) }));
+  const path = [1, "a", 2];
+  const issues = schema.safeParse([{ a: [] }, { a: [1, 2, "x"] }]).error!.issues;
+  expect(issues.map((iss) => iss.path)).toEqual([path]);
+
+  const own = ["b"];
+  const refined = z.array(
+    z.object({ b: z.string() }).superRefine((_, ctx) => ctx.addIssue({ code: "custom", message: "no", path: own }))
+  );
+  expect(refined.safeParse([{ b: "x" }]).error!.issues[0]!.path).toEqual([0, "b"]);
+  expect(own).toEqual(["b"]);
+});
+
 test("parse should fail given sparse array", () => {
   const schema = z.array(z.string()).nonempty().min(1).max(3);
   const result = schema.safeParse(new Array(3));

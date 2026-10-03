@@ -1844,6 +1844,51 @@ export interface $ZodArrayInternals<T extends SomeType = $ZodType> extends _$Zod
 
 export interface $ZodArray<T extends SomeType = $ZodType> extends $ZodType<any, any, $ZodArrayInternals<T>> {}
 
+type SizeCheckDef =
+  | checks.$ZodCheckMaxLengthDef
+  | checks.$ZodCheckMinLengthDef
+  | checks.$ZodCheckLengthEqualsDef
+  | checks.$ZodCheckMaxSizeDef
+  | checks.$ZodCheckMinSizeDef
+  | checks.$ZodCheckSizeEqualsDef;
+type Cap = [number, checks.$ZodCheck<never>];
+
+// a check that may change the value ends the scan
+function upperCaps(defChecks: checks.$ZodCheck<never>[] | undefined): Cap[] {
+  const caps: Cap[] = [];
+  for (const ch of defChecks ?? []) {
+    const d = ch._zod.def as SizeCheckDef;
+    switch (d.check) {
+      case "max_length":
+      case "max_size":
+        caps.push([d.maximum, ch]);
+        break;
+      case "length_equals":
+        caps.push([d.length, ch]);
+        break;
+      case "size_equals":
+        caps.push([d.size, ch]);
+        break;
+      case "min_length":
+      case "min_size":
+        break;
+      default:
+        return caps;
+    }
+  }
+  return caps;
+}
+
+// the check reports after parse, so its `when` must let it run
+function overCap(caps: Cap[], n: number, payload: ParsePayload, ctx: ParseContextInternal | undefined): boolean {
+  if (ctx?.skipChecks) return false;
+  for (const [cap, ch] of caps) {
+    const when = ch._zod.def.when;
+    if (n > cap && (!when || when(payload))) return true;
+  }
+  return false;
+}
+
 function handleArrayResult(result: ParsePayload<any>, final: ParsePayload<any[]>, index: number) {
   if (result.issues.length) {
     final.issues.push(...util.prefixIssues(index, result.issues));
@@ -1856,6 +1901,8 @@ export const $ZodArray: core.$constructor<$ZodArray> = /*@__PURE__*/ core.$const
 
   const memo = core.globalConfig.memoizer;
   memo?.attach(inst);
+
+  const caps = upperCaps(def.checks);
 
   inst._zod.parse = (payload, ctx) => {
     const input = payload.value;
@@ -1870,6 +1917,8 @@ export const $ZodArray: core.$constructor<$ZodArray> = /*@__PURE__*/ core.$const
       });
       return payload;
     }
+
+    if (overCap(caps, input.length, payload, ctx)) return payload;
 
     payload.value = memo ? memo.alloc(inst, payload, Array(input.length), ctx) : Array(input.length);
     const proms: Promise<any>[] = [];
@@ -3442,6 +3491,7 @@ export const $ZodMap: core.$constructor<$ZodMap> = /*@__PURE__*/ core.$construct
   $ZodType.init(inst, def);
   const memo = core.globalConfig.memoizer;
   memo?.attach(inst);
+  const caps = upperCaps(def.checks);
 
   inst._zod.parse = (payload, ctx) => {
     const input = payload.value;
@@ -3455,6 +3505,8 @@ export const $ZodMap: core.$constructor<$ZodMap> = /*@__PURE__*/ core.$construct
       });
       return payload;
     }
+
+    if (overCap(caps, input.size, payload, ctx)) return payload;
 
     const proms: Promise<any>[] = [];
     payload.value = memo ? memo.alloc(inst, payload, new Map(), ctx) : new Map();
@@ -3554,6 +3606,7 @@ export const $ZodSet: core.$constructor<$ZodSet> = /*@__PURE__*/ core.$construct
   $ZodType.init(inst, def);
   const memo = core.globalConfig.memoizer;
   memo?.attach(inst);
+  const caps = upperCaps(def.checks);
 
   inst._zod.parse = (payload, ctx) => {
     const input = payload.value;
@@ -3566,6 +3619,8 @@ export const $ZodSet: core.$constructor<$ZodSet> = /*@__PURE__*/ core.$construct
       });
       return payload;
     }
+
+    if (overCap(caps, input.size, payload, ctx)) return payload;
 
     const proms: Promise<any>[] = [];
     payload.value = memo ? memo.alloc(inst, payload, new Set(), ctx) : new Set();

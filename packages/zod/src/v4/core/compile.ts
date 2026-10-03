@@ -1551,6 +1551,29 @@ function generateNullableCheck(
   return outputVar;
 }
 
+function generateUpperCaps(doc: Doc, schema: SomeType, size: string): void {
+  for (const check of (schema._zod.def.checks ?? []) as SupportedCheck[]) {
+    const def = check._zod.def;
+    switch (def.check) {
+      case "max_length":
+      case "max_size":
+        doc.write(`if (${size} > ${numericOperand(def.maximum, def.check)}) return INVALID;`);
+        break;
+      case "length_equals":
+        doc.write(`if (${size} > ${numericOperand(def.length, def.check)}) return INVALID;`);
+        break;
+      case "size_equals":
+        doc.write(`if (${size} > ${numericOperand(def.size, def.check)}) return INVALID;`);
+        break;
+      case "min_length":
+      case "min_size":
+        break;
+      default:
+        return;
+    }
+  }
+}
+
 function generateArrayCheck(
   doc: Doc,
   ctx: CompileContext,
@@ -1560,6 +1583,7 @@ function generateArrayCheck(
 ): string | null {
   const def = schema._zod.def as unknown as { element: SomeType };
   doc.write(`if (!Array.isArray(${accessor})) return INVALID;`);
+  generateUpperCaps(doc, schema, `${accessor}.length`);
 
   // Build a new array with validated/transformed elements.
   const outputVar = buildsValue ? newVar(ctx) : null;
@@ -2094,6 +2118,7 @@ function generateMapCheck(doc: Doc, ctx: CompileContext, schema: SomeType, acces
   const def = schema._zod.def as unknown as { keyType: SomeType; valueType: SomeType };
 
   doc.write(`if (!(${accessor} instanceof Map)) return INVALID;`);
+  generateUpperCaps(doc, schema, `${accessor}.size`);
 
   const outputVar = newVar(ctx);
   const kVar = newVar(ctx);
@@ -2115,6 +2140,7 @@ function generateSetCheck(doc: Doc, ctx: CompileContext, schema: SomeType, acces
   const def = schema._zod.def as unknown as { valueType: SomeType };
 
   doc.write(`if (!(${accessor} instanceof Set)) return INVALID;`);
+  generateUpperCaps(doc, schema, `${accessor}.size`);
 
   const outputVar = newVar(ctx);
   const valVar = newVar(ctx);

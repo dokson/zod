@@ -340,3 +340,10 @@ test("min/max", async () => {
     ]
   `);
 });
+
+test("an oversized map fails on its size without walking the entries", () => {
+  const input = new Map(Array.from({ length: 1000 }, (_, i) => [i, "x"] as const));
+  for (const schema of [z.map(z.string(), z.number()).max(3), z.map(z.string(), z.number()).size(3)]) {
+    expect(schema.safeParse(input).error!.issues.map((iss) => iss.code)).toEqual(["too_big"]);
+  }
+});

@@ -924,8 +924,9 @@ export function explicitlyAborted(x: schemas.ParsePayload, startIndex = 0): bool
 
 export function prefixIssues(path: PropertyKey, issues: errors.$ZodRawIssue[]): errors.$ZodRawIssue[] {
   return issues.map((iss) => {
-    (iss as any).path ??= [];
-    (iss as any).path.unshift(path);
+    // unshift onto [] over-allocates
+    const p = (iss as any).path;
+    (iss as any).path = p ? [path, ...p] : [path];
     return iss;
   });
 }
