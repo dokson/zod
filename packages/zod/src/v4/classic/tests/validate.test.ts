@@ -455,8 +455,7 @@ test("the first failure stops the walk whatever follows it", () => {
   }
 });
 
-test("a continuable issue never stops the walk", () => {
-  // .min() is continuable, so a surrounding schema can still reconcile it and the guard must not stop
+test("a continuable issue stops a container too", () => {
   let calls = 0;
   const el = z
     .string()
@@ -466,24 +465,40 @@ test("a continuable issue never stops the walk", () => {
       return true;
     });
   expect(z.validate(z.array(el), ["a", "b", "c"])).toBe(false);
-  expect(calls).toBe(3);
+  expect(calls).toBe(1);
+
+  for (const jitless of [false, true]) {
+    const [input, reads] = counted({ b: 1 }, { a: 5 });
+    expect(z.validate(z.object({ a: z.number().max(1), b: z.number() }), input, { jitless })).toBe(false);
+    expect(reads(), jitless ? "interpreted" : "compiled").toBe(0);
+  }
+
+  expect(z.validate(z.set(z.email()), new Set(["a", "b"]))).toBe(false);
+  expect(z.validate(z.array(z.number().max(1)), Array(100_000).fill(5))).toBe(false);
 });
 
-test("z.record keeps walking under validate", () => {
-  // deliberate asymmetry: a record's invalid_key aborts, but an enclosing intersection reconciles it against the sibling operand, so a stopped loop hides keys the sibling does not own
-  let reads = 0;
-  const input: Record<string, unknown> = { a: 1 };
-  for (const k of ["b", "c"]) {
-    Object.defineProperty(input, k, {
-      enumerable: true,
-      get() {
-        reads++;
-        return "x";
-      },
-    });
-  }
-  expect(z.validate(z.record(z.string(), z.string()), input)).toBe(false);
-  expect(reads).toBe(2);
+test("z.record stops on a value issue but walks past a key rejection under validate", () => {
+  // an enclosing intersection can reconcile a rejected key, never a failed value
+  const walk = (first: [string, unknown]) => {
+    let reads = 0;
+    const input: Record<string, unknown> = { [first[0]]: first[1] };
+    for (const k of ["b", "c"]) {
+      Object.defineProperty(input, k, {
+        enumerable: true,
+        get() {
+          reads++;
+          return "x";
+        },
+      });
+    }
+    return [input, () => reads] as const;
+  };
+  const [badValue, valueReads] = walk(["a", 1]);
+  expect(z.validate(z.record(z.string(), z.string()), badValue)).toBe(false);
+  expect(valueReads()).toBe(0);
+  const [badKey, keyReads] = walk(["1", "x"]);
+  expect(z.validate(z.record(z.string().regex(/^[a-z]$/), z.string()), badKey)).toBe(false);
+  expect(keyReads()).toBe(2);
 });
 
 test("validate matches safeParse where an issue can still be reconciled away", async () => {
@@ -494,6 +509,7 @@ test("validate matches safeParse where an issue can still be reconciled away", a
     z.intersection(recA.pipe(z.any()), recB.pipe(z.any())),
     z.intersection(z.strictObject({ a: z.string() }), z.strictObject({ b: z.number() })),
     z.intersection(z.array(z.string()), z.array(z.string().min(2))),
+    z.intersection(z.array(z.string().min(2)), z.array(z.string())),
     z.strictObject({ a: z.string() }).pipe(z.any()),
     z.union([z.strictObject({ a: z.string() }), z.strictObject({ a: z.string(), b: z.number() })]),
     z.array(z.string()).catch([]),
@@ -546,6 +562,12 @@ test("abortEarly does not leak into safeParse", () => {
   expect(schema.safeParse({ a: 1, b: 2, c: 3 }).error!.issues).toHaveLength(3);
   expect(z.validate(schema, { a: 1, b: 2, c: 3 })).toBe(false);
   expect(schema.safeParse({ a: 1, b: 2, c: 3 }).error!.issues).toHaveLength(3);
+});
+
+test("the abortEarly parse option bounds the issues safeParse reports", () => {
+  const input = Array(100_000).fill(5);
+  expect(z.array(z.number().max(1)).safeParse(input, { abortEarly: true }).error!.issues).toHaveLength(1);
+  expect(z.array(z.number().max(1)).safeParse(input).error!.issues).toHaveLength(100_000);
 });
 
 test("a callback after the first failure never runs, so validate answers where safeParse throws", () => {

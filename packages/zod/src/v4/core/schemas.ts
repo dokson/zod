@@ -21,8 +21,8 @@ export interface ParseContext<T extends errors.$ZodIssueBase = never> {
   readonly reportInput?: boolean;
   /** Skip eval-based fast path. Default `false`. */
   readonly jitless?: boolean;
-  /** Abort validation after the first error. Default `false`. */
-  // readonly abortEarly?: boolean;
+  /** Stop each container at its first error. Default `false`. */
+  readonly abortEarly?: boolean;
 }
 
 /** @internal */
@@ -30,8 +30,6 @@ export interface ParseContextInternal<T extends errors.$ZodIssueBase = never> ex
   readonly async?: boolean | undefined;
   readonly direction?: "forward" | "backward";
   readonly skipChecks?: boolean;
-  /** Set only by `validate`/`validateAsync`. A container may stop before its next child, never inside one, so a map entry and a tuple's fixed items parse whole. */
-  readonly abortEarly?: boolean;
 }
 
 /** Gives a container cycle support: `attach` wraps its parse, and `alloc` registers the object it builds into before any child is parsed so a reference back to the same input resolves to it. */
@@ -1844,6 +1842,22 @@ export interface $ZodArrayInternals<T extends SomeType = $ZodType> extends _$Zod
 
 export interface $ZodArray<T extends SomeType = $ZodType> extends $ZodType<any, any, $ZodArrayInternals<T>> {}
 
+// only key rejections can be reconciled later; made aborting so the truncated value never reaches mergeValues
+function stopEarly(x: ParsePayload, start: number): boolean {
+  if (x.aborted === true) return true;
+  for (let i = start; i < x.issues.length; i++) {
+    const iss = x.issues[i]!;
+    if (
+      iss.code === "unrecognized_keys" ||
+      (iss.code === "invalid_key" && iss.origin === "record" && iss.path?.length === 1)
+    )
+      continue;
+    (iss as any).continue = false;
+    return true;
+  }
+  return false;
+}
+
 // an oversized container fails its leading size checks before any element is parsed
 function capSize(inst: $ZodType, size: (input: any) => number): void {
   const caps = util.sizeCaps(inst._zod.def.checks);
@@ -1917,7 +1931,7 @@ export const $ZodArray: core.$constructor<$ZodArray> = /*@__PURE__*/ core.$const
       } else {
         handleArrayResult(result, payload, i);
         // the element's payload is authoritative here, since handleArrayResult forwards every issue; an object's is not, because it drops a failed absent optional
-        if (abortEarly && result.issues.length !== 0 && util.aborted(result)) break;
+        if (abortEarly && result.issues.length !== 0 && stopEarly(result, 0)) break;
       }
     }
 
@@ -2138,7 +2152,7 @@ function handleCatchall(
   let seen = 0;
   for (const key in input) {
     if (abortEarly && payload.issues.length !== seen) {
-      if (util.aborted(payload, seen)) break;
+      if (stopEarly(payload, seen)) break;
       seen = payload.issues.length;
     }
     // Must precede the __proto__ branch: a declared key is not unrecognized, even though the shape loop deliberately strips __proto__ from the parsed output.
@@ -2244,7 +2258,7 @@ export const $ZodObject: core.$constructor<$ZodObject> = /*@__PURE__*/ core.$con
 
     for (const key of value.allKeys) {
       if (abortEarly && payload.issues.length !== seen) {
-        if (util.aborted(payload, seen)) break;
+        if (stopEarly(payload, seen)) break;
         seen = payload.issues.length;
       }
       if (key === "__proto__") continue;
@@ -2295,6 +2309,10 @@ export const $ZodObjectJIT: core.$constructor<$ZodObject> = /*@__PURE__*/ core.$
             iss.path = iss.path ? [${k}, ...iss.path] : [${k}];
             payload.issues.push(iss);
             if (iss.continue !== true) ${id}_ab = true;
+            else if (ctx && ctx.abortEarly && iss.code !== "unrecognized_keys" && iss.code !== "invalid_key") {
+              iss.continue = false;
+              ${id}_ab = true;
+            }
           }
           if (${id}_ab && ctx && ctx.abortEarly) {
             payload.value = newResult;
@@ -3107,7 +3125,7 @@ export const $ZodTuple: core.$constructor<$ZodTuple> = /*@__PURE__*/ core.$const
       let seen = payload.issues.length;
       for (const el of rest) {
         if (abortEarly && payload.issues.length !== seen) {
-          if (util.aborted(payload, seen)) break;
+          if (stopEarly(payload, seen)) break;
           seen = payload.issues.length;
         }
         i++;
@@ -3282,7 +3300,7 @@ export const $ZodRecord: core.$constructor<$ZodRecord> = /*@__PURE__*/ core.$con
       return payload;
     }
 
-    // no guard in either loop below: a record's invalid_key aborts but an enclosing intersection can reconcile it, so a stopped loop hides keys the sibling does not own and the intersection then rejects nothing
+    // the guard below skips key rejections: an enclosing intersection can reconcile them
     const proms: Promise<any>[] = [];
 
     const values = def.keyType._zod.values;
@@ -3358,8 +3376,14 @@ export const $ZodRecord: core.$constructor<$ZodRecord> = /*@__PURE__*/ core.$con
       payload.value = memo ? memo.alloc(inst, payload, {}, ctx) : {};
       // An enumerable key schema declares which keys the record owns, so a key outside the set is unrecognized. A non-enumerable one (regex, refine) is a constraint every key must satisfy, so a failing key is invalid. Only the former is reconcilable against the other side of an intersection.
       let unrecognized!: string[];
+      const abortEarly = ctx?.abortEarly;
+      let seen = payload.issues.length;
       // Reflect.ownKeys for Symbol-key support; filter non-enumerable to match z.object()
       for (const key of Reflect.ownKeys(input)) {
+        if (abortEarly && payload.issues.length !== seen) {
+          if (stopEarly(payload, seen)) break;
+          seen = payload.issues.length;
+        }
         if (key === "__proto__") continue;
         if (!Object.prototype.propertyIsEnumerable.call(input, key)) continue;
         let keyResult = def.keyType._zod.run({ value: key, issues: [] }, ctx);
@@ -3492,7 +3516,7 @@ export const $ZodMap: core.$constructor<$ZodMap> = /*@__PURE__*/ core.$construct
 
     for (const [key, value] of input) {
       if (abortEarly && payload.issues.length !== seen) {
-        if (util.aborted(payload, seen)) break;
+        if (stopEarly(payload, seen)) break;
         seen = payload.issues.length;
       }
       const keyResult = def.keyType._zod.run({ value: key, issues: [] }, ctx);
@@ -3603,7 +3627,7 @@ export const $ZodSet: core.$constructor<$ZodSet> = /*@__PURE__*/ core.$construct
     let seen = payload.issues.length;
     for (const item of input) {
       if (abortEarly && payload.issues.length !== seen) {
-        if (util.aborted(payload, seen)) break;
+        if (stopEarly(payload, seen)) break;
         seen = payload.issues.length;
       }
       const result = def.valueType._zod.run({ value: item, issues: [] }, ctx);
