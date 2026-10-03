@@ -62,8 +62,8 @@ const CEILINGS: Record<string, number> = {
   // Also carries the guards `validate` parses under: an `aborted` check in each container loop, and two early exits in the generated object parser. Only a bundle containing a container pays — boolean is byte-identical to main and string measures three bytes smaller — so this ceiling rises by the measured +76 and the other two do not move. Measured 4696 locally plus 18 headroom.
   // Lowered by the measured −69 for the same bag strip: the string and number inits no longer carry pattern derivation or attach-time metadata writes.
 
-  // factory check snapshots on the check-only properties base measure 4654 gzip bytes plus 28 headroom
-  "zod-mini-object": 4682,
+  // factory check snapshots on the check-only properties base measure 4654 gzip bytes plus 28 headroom; the abortEarly continuable stop brings it to 4714 plus 18
+  "zod-mini-object": 4732,
 };
 
 /**

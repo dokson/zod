@@ -268,6 +268,17 @@ z.string().parse(12, {
 // ]
 ```
 
+### Stop at the first error
+
+By default, Zod reports every issue, so a large invalid array yields one issue per element. To stop each array, object, record, map or set at its first issue, use the `abortEarly` flag. This is useful when parsing untrusted input:
+
+```ts
+z.array(z.number()).safeParse(hugeArray, {
+  abortEarly: true
+});
+// one issue, however many elements fail
+```
+
 ## Global error customization
 
 To specify a global error map, use `z.config()` to set Zod's `customError` configuration setting:
