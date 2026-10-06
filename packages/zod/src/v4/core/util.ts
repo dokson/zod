@@ -535,7 +535,11 @@ export const allowsEval: { value: boolean } = /* @__PURE__*/ cached(() => {
 });
 
 export function isPlainObject(o: any): o is Record<PropertyKey, unknown> {
-  if (isObject(o) === false) return false;
+  if (typeof o !== "object" || o === null) return false;
+
+  const proto = Object.getPrototypeOf(o);
+  if (proto === Object.prototype || proto === null) return true;
+  if (Array.isArray(o)) return false;
 
   // modified constructor
   const ctor = o.constructor;

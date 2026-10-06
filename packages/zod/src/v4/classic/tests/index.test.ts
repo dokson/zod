@@ -1,3 +1,4 @@
+import * as vm from "node:vm";
 import { expect, expectTypeOf, test } from "vitest";
 import * as z from "zod/v4";
 import type { util } from "zod/v4/core";
@@ -869,6 +870,12 @@ test("isPlainObject", () => {
   expect(z.core.util.isPlainObject("string")).toEqual(false);
   expect(z.core.util.isPlainObject(123)).toEqual(false);
   expect(z.core.util.isPlainObject(Symbol())).toEqual(false);
+  expect(z.core.util.isPlainObject({ constructor: Date })).toEqual(true);
+  expect(z.core.util.isPlainObject(Object.create({ a: 1 }))).toEqual(true);
+  expect(z.core.util.isPlainObject(new (class {})())).toEqual(false);
+  expect(z.core.util.isPlainObject(vm.runInNewContext("({ a: 1 })"))).toEqual(true);
+  expect(z.core.util.isPlainObject(vm.runInNewContext("[]"))).toEqual(false);
+  expect(z.core.util.isPlainObject(vm.runInNewContext("new Date()"))).toEqual(false);
   expect(z.core.util.isPlainObject({ constructor: "string" })).toEqual(true);
   expect(z.core.util.isPlainObject({ constructor: 123 })).toEqual(true);
   expect(z.core.util.isPlainObject({ constructor: null })).toEqual(true);
