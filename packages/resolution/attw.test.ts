@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execa } from "execa";
@@ -27,7 +27,7 @@ describe("Are The Types Wrong (attw) tests", () => {
       return;
     }
 
-    const zodPackagePath = path.join(__dirname, "node_modules", "zod");
+    const zodPackagePath = realpathSync(path.join(__dirname, "node_modules", "zod"));
     const result = await execa("nub", ["exec", "--node", "attw", "--pack", zodPackagePath, "--format", "ascii"], {
       cwd: __dirname,
       reject: false, // Don't throw on non-zero exit codes

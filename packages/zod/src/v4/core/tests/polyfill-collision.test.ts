@@ -1,15 +1,13 @@
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { build, transform } from "esbuild";
 import { expect, test } from "vitest";
 import * as core from "zod/v4/core";
+import { srcDir, srcPath } from "../../../tests/paths.js";
 
 // Browser polyfills for node globals land as raw text in the bundle's top scope — an esbuild `banner`, a scope-unaware injector — so the bundler never sees the collision and the browser is the first thing to read both declarations. zod must therefore declare none of these names at module scope. The JSON Schema pass shipped an `export function process` for three minors before #6397 reported the white screen it caused.
 const INJECTED = ["process", "Buffer", "global", "__dirname", "__filename"];
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const CLASSIC = path.resolve(here, "../../../index.ts");
-const MINI = path.resolve(here, "../../../mini/index.ts");
+const CLASSIC = srcPath("index.ts");
+const MINI = srcPath("mini/index.ts");
 
 const polyfills = INJECTED.map((name) => `const ${name} = {};`).join("\n");
 
@@ -23,7 +21,7 @@ test.each([
   "a %s bundle reaching toJSONSchema parses beside polyfilled node globals",
   async (_flavor, entrypoint) => {
     const result = await build({
-      stdin: { contents: ENTRY.replace("%ENTRY%", entrypoint), loader: "ts", resolveDir: here },
+      stdin: { contents: ENTRY.replace("%ENTRY%", entrypoint), loader: "ts", resolveDir: srcDir },
       bundle: true,
       format: "esm",
       target: "es2020",

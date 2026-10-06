@@ -1,22 +1,20 @@
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { expect, test } from "vitest";
+import { srcDir, srcPath } from "../../../tests/paths.js";
 
 // These declarations are unreachable from a minimal schema, but esbuild only drops them because of details that read as noise: `@__PURE__` annotations, and the `anchor()` helper in regexes.ts that exists solely because esbuild will not drop an annotated call whose argument interpolates a variable. Inlining the helper or deleting an annotation silently puts them back with no other test going red.
 //
 // Rollup drops all of these regardless, so a rollup fixture would report no difference and prove nothing. This has to run under esbuild.
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const MINI = path.resolve(here, "../../../mini/index.ts");
-const CLASSIC = path.resolve(here, "../../../index.ts");
+const MINI = srcPath("mini/index.ts");
+const CLASSIC = srcPath("index.ts");
 
 async function bundle(entrypoint: string, source: string): Promise<string> {
   const result = await build({
     stdin: {
       contents: source.replace("%ENTRY%", entrypoint),
       loader: "ts",
-      resolveDir: here,
+      resolveDir: srcDir,
     },
     bundle: true,
     minify: true,
