@@ -69,3 +69,11 @@ test("parse should fail given sparse array", () => {
 
   expect(() => schema.parse(new Array(3))).toThrow();
 });
+
+test("an upper length bound fails before any element is parsed", () => {
+  let parsed = 0;
+  const el = z.string().refine(() => ++parsed);
+  expect(z.array(el).max(2).safeParse([1, 2, 3]).error!.issues).toMatchObject([{ code: "too_big", path: [] }]);
+  expect(z.array(el).length(2).safeParse([1, 2, 3]).error!.issues).toMatchObject([{ code: "too_big", exact: true }]);
+  expect(parsed).toEqual(0);
+});

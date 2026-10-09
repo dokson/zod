@@ -140,3 +140,12 @@ test("throws when the given set has multiple invalid entries", () => {
     expect(result.error.issues[1].path).toEqual([1]);
   }
 });
+
+test("an upper size bound fails before any element is parsed", () => {
+  expect(
+    z
+      .set(z.string())
+      .max(1)
+      .safeParse(new Set([1, 2])).error!.issues
+  ).toMatchObject([{ code: "too_big" }]);
+});

@@ -2265,6 +2265,7 @@ export class ZodArray<T extends ZodTypeAny, Cardinality extends ArrayCardinality
           exact: true,
           message: def.exactLength.message,
         });
+        if (tooBig) return INVALID;
         status.dirty();
       }
     }
@@ -2293,7 +2294,7 @@ export class ZodArray<T extends ZodTypeAny, Cardinality extends ArrayCardinality
           exact: false,
           message: def.maxLength.message,
         });
-        status.dirty();
+        return INVALID;
       }
     }
 
@@ -3727,7 +3728,7 @@ export class ZodSet<Value extends ZodTypeAny = ZodTypeAny> extends ZodType<
           exact: false,
           message: def.maxSize.message,
         });
-        status.dirty();
+        return INVALID;
       }
     }
 
