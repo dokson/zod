@@ -271,7 +271,7 @@ export function compileFn<T extends SomeType>(schema: T, options?: CompileFnOpti
   const factoryCode = `return (input) => {\n${code}\n}`;
   let fn: CompiledFn<core.output<T>>;
   try {
-    const factory = new F(...constantNames, factoryCode);
+    const factory = new F(...constantNames.map(util.trustedScript), util.trustedScript(factoryCode));
     fn = factory(...constantValues) as CompiledFn<core.output<T>>;
   } catch (err) {
     // Malformed generated code (or a CSP environment rejecting `new Function`) surfaces as a typed error so the global shim falls back to the runtime instead of crashing with a raw SyntaxError/EvalError.
