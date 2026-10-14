@@ -1,3 +1,5 @@
+import { trustedScript } from "./util.js";
+
 type ModeWriter = (doc: Doc, modes: { execution: "sync" | "async" }) => void;
 
 export class Doc {
@@ -44,8 +46,8 @@ export class Doc {
     const F = Function;
     const content = this?.content ?? [``];
     const factory = new F(
-      ...Object.keys(this.closed),
-      `return function (${this.args.join(", ")}) {\n${content.join("\n")}\n};`
+      ...Object.keys(this.closed).map(trustedScript),
+      trustedScript(`return function (${this.args.join(", ")}) {\n${content.join("\n")}\n};`)
     );
     return factory(...Object.values(this.closed)) as any;
   }

@@ -527,12 +527,37 @@ export const allowsEval: { value: boolean } = /* @__PURE__*/ cached(() => {
 
   try {
     const F = Function;
-    new F("");
+    new F(trustedScript(""));
     return true;
   } catch (_) {
     return false;
   }
 });
+
+interface TrustedScriptPolicy {
+  createScript(code: string): unknown;
+}
+
+interface GlobalThisWithTrustedTypes {
+  trustedTypes?: { createPolicy(name: string, rules: { createScript(code: string): string }): TrustedScriptPolicy };
+  __zod_trustedTypesPolicy?: TrustedScriptPolicy | null;
+}
+
+/** Wraps generated code in a `TrustedScript` from a `"zod"` policy when Trusted Types are available. */
+export function trustedScript(code: string): string {
+  const g = globalThis as GlobalThisWithTrustedTypes;
+  let policy = g.__zod_trustedTypesPolicy;
+  // on `globalThis` because a second copy of zod calling `createPolicy("zod")` throws
+  if (policy === undefined) {
+    try {
+      policy = g.trustedTypes?.createPolicy("zod", { createScript: (s) => s }) ?? null;
+    } catch (_) {
+      policy = null;
+    }
+    g.__zod_trustedTypesPolicy = policy;
+  }
+  return (policy ? policy.createScript(code) : code) as string;
+}
 
 export function isPlainObject(o: any): o is Record<PropertyKey, unknown> {
   if (isObject(o) === false) return false;
