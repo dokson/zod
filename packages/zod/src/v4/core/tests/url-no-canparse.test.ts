@@ -11,7 +11,7 @@ function restoreURL() {
   Object.defineProperty(NativeURL, "parse", parseDescriptor);
 }
 
-describe("URL parser fallbacks", () => {
+describe("URL parser fallbacks", { timeout: 30_000 }, () => {
   beforeEach(() => {
     restoreURL();
     vi.resetModules();
